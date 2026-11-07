@@ -313,7 +313,8 @@ function metaLine(p){
 let PHOTOS={};
 function photosFor(p){
   if(!p.real||!p.article)return [];
-  const list=PHOTOS[p.brand+'|'+p.article.split(/\s+/)[0]]||[];
+  const art=p.article.split(/\s+/)[0];
+  const list=[...new Set([...(PHOTOS[p.brand+'|'+art]||[]),...(p.coll?PHOTOS[p.coll+'|'+art]||[]:[])])];
   return list.map(u=>u.split('/').map(encodeURIComponent).join('/'));
 }
 function photoImg(p){
