@@ -303,6 +303,18 @@ function metaLine(p){
   return p.cat==='Обои'?`${p.room} · рулон ${p.width}`:(p.meta||p.cat);
 }
 
+function photoImg(p){
+  if(!p.real||!p.article)return '';
+  const base='photos/'+encodeURIComponent(p.brand)+'/'+encodeURIComponent(p.article.split(/\s+/)[0])+'.';
+  return `<img src="${base}jpg" data-b="${base}" data-l="webp,png" loading="lazy" alt="" onerror="photoFail(this)" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;">`;
+}
+function photoFail(el){
+  const l=(el.dataset.l||'').split(',').filter(Boolean);
+  if(!l.length){el.remove();return;}
+  el.dataset.l=l.slice(1).join(',');
+  el.src=el.dataset.b+l[0];
+}
+
 function swatchStyle(p){
   if(p.art)return `background:#EAF3FA url('data:image/svg+xml,${encodeURIComponent(artSvg(p))}') center/cover no-repeat;`;
   const [a,b]=p.colors;
@@ -328,7 +340,7 @@ function card(p){
     ? `<div class="qty card-qty"><button data-qty="-1" data-id="${p.id}" aria-label="Убрать рулон">−</button><span>${qty}</span><button data-qty="1" data-id="${p.id}" aria-label="Добавить рулон">+</button></div>`
     : `<button class="add-btn" data-add="${p.id}">В корзину</button>`;
   return `<div class="card" data-product="${p.id}" style="cursor:pointer;">
-    <div class="swatch" style="${swatchStyle(p)}">${badge}<span class="fav${favorites[p.id]?' active':''}" data-fav="${p.id}">${favorites[p.id]?'♥':'♡'}</span></div>
+    <div class="swatch" style="${swatchStyle(p)}">${photoImg(p)}${badge}<span class="fav${favorites[p.id]?' active':''}" data-fav="${p.id}">${favorites[p.id]?'♥':'♡'}</span></div>
     <div class="card-body">
       <div class="card-coll">${[p.brand,p.country,p.coll].filter(Boolean).join(' · ')}</div>
       <div class="card-name">${p.name}</div>
@@ -481,7 +493,7 @@ function renderProduct(id){
       </div>
     </div>
     <div class="product-layout">
-      <div class="swatch" style="${swatchStyle(p)};cursor:zoom-in;" data-zoom="${p.id}" title="Открыть на весь экран"></div>
+      <div class="swatch" style="${swatchStyle(p)};cursor:zoom-in;" data-zoom="${p.id}" title="Открыть на весь экран">${photoImg(p)}</div>
       <div>
         <h3 style="font-size:16px;margin-bottom:6px;">Характеристики</h3>
         <div class="spec-row"><span>Производитель</span><span>${p.brand}${p.country?` (${p.country})`:''}</span></div>
@@ -768,7 +780,7 @@ document.addEventListener('click',e=>{
   const zoom=e.target.closest('[data-zoom]');
   if(zoom){
     const p=PRODUCTS.find(x=>x.id==zoom.dataset.zoom);
-    if(p){document.getElementById('imgModalBox').style.cssText=swatchStyle(p);document.getElementById('imgModal').classList.add('open');}
+    if(p){const box=document.getElementById('imgModalBox');box.style.cssText=swatchStyle(p)+';position:relative;';box.innerHTML=photoImg(p);document.getElementById('imgModal').classList.add('open');}
     return;
   }
   if(e.target.id==='imgModal'||e.target.id==='imgModalClose'){document.getElementById('imgModal').classList.remove('open');return;}
