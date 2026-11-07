@@ -161,6 +161,13 @@ section{padding:36px 0;}
 .calc-field .input{margin-bottom:14px;}
 .calc-result .big{font-family:'Fraunces',serif;font-size:44px;color:var(--brand);font-weight:600;line-height:1;}
 @media(max-width:520px){.calc-grid{grid-template-columns:1fr;}}
+.ph-wrap{position:absolute;inset:0;}
+.ph-wrap img{width:100%;height:100%;object-fit:cover;display:block;}
+.ph-nav{position:absolute;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:100px;background:rgba(255,255,255,.88);color:#17283A;font-size:19px;line-height:1;display:flex;align-items:center;justify-content:center;z-index:2;cursor:pointer;}
+.ph-nav.prev{left:6px;}.ph-nav.next{right:6px;}
+.ph-dots{position:absolute;bottom:8px;left:0;right:0;display:flex;justify-content:center;gap:5px;z-index:2;pointer-events:none;}
+.ph-dots i{width:6px;height:6px;border-radius:100px;background:rgba(255,255,255,.6);}
+.ph-dots i.on{background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.3);}
 .empty{text-align:center;padding:60px 20px;color:var(--muted);}
 .empty h2{color:var(--ink);margin-bottom:10px;}
 
@@ -303,16 +310,17 @@ function metaLine(p){
   return p.cat==='Обои'?`${p.room} · рулон ${p.width}`:(p.meta||p.cat);
 }
 
-function photoImg(p){
-  if(!p.real||!p.article)return '';
-  const base='photos/'+encodeURIComponent(p.brand)+'/'+encodeURIComponent(p.article.split(/\s+/)[0])+'.';
-  return `<img src="${base}jpg" data-b="${base}" data-l="webp,png" loading="lazy" alt="" onerror="photoFail(this)" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;">`;
+let PHOTOS={};
+function photosFor(p){
+  if(!p.real||!p.article)return [];
+  const list=PHOTOS[p.brand+'|'+p.article.split(/\s+/)[0]]||[];
+  return list.map(u=>u.split('/').map(encodeURIComponent).join('/'));
 }
-function photoFail(el){
-  const l=(el.dataset.l||'').split(',').filter(Boolean);
-  if(!l.length){el.remove();return;}
-  el.dataset.l=l.slice(1).join(',');
-  el.src=el.dataset.b+l[0];
+function photoImg(p){
+  const list=photosFor(p);
+  if(!list.length)return '';
+  const nav=list.length>1?`<button class="ph-nav prev" data-ph="-1" aria-label="Предыдущее фото">‹</button><button class="ph-nav next" data-ph="1" aria-label="Следующее фото">›</button><div class="ph-dots">${list.map((_,i)=>`<i class="${i?'':'on'}"></i>`).join('')}</div>`:'';
+  return `<div class="ph-wrap" data-pid="${p.id}" data-i="0"><img src="${list[0]}" alt="" loading="lazy" onerror="this.style.display='none'">${nav}</div>`;
 }
 
 function swatchStyle(p){
@@ -771,6 +779,15 @@ document.addEventListener('click',e=>{
   if(qty){const id=qty.dataset.id;const d=parseInt(qty.dataset.qty);cart[id]=Math.max(0,(cart[id]||0)+d);if(cart[id]===0)delete cart[id];saveCart();updateCartBadge();route(true);return;}
   const rem=e.target.closest('[data-remove]');
   if(rem){delete cart[rem.dataset.remove];saveCart();updateCartBadge();route(true);return;}
+  const phb=e.target.closest('[data-ph]');
+  if(phb){
+    const box=phb.closest('.ph-wrap'),pp=PRODUCTS.find(x=>x.id==box.dataset.pid),list=photosFor(pp),n=list.length;
+    const i=(Number(box.dataset.i)+Number(phb.dataset.ph)+n)%n;
+    box.dataset.i=i;
+    const img=box.querySelector('img');img.style.display='';img.src=list[i];
+    box.querySelectorAll('.ph-dots i').forEach((d,k)=>d.classList.toggle('on',k===i));
+    return;
+  }
   if(e.target.closest('[data-ask]')){location.hash='#/about';return;}
   const more=e.target.closest('[data-more]');
   if(more){limits[more.dataset.more]=(limits[more.dataset.more]||48)+48;route(true);return;}
@@ -846,6 +863,7 @@ Object.keys(cart).forEach(id=>{if(!PRODUCTS.some(p=>p.id==id))delete cart[id];})
 Object.keys(favorites).forEach(id=>{if(!PRODUCTS.some(p=>p.id==id))delete favorites[id];});saveFavs();
 updateCartBadge();
 route();
+fetch('photos-manifest.json').then(r=>r.ok?r.json():{}).then(j=>{PHOTOS=j||{};route(true);}).catch(()=>{});
 </script>
 <div class="img-modal" id="imgModal">
   <button class="img-modal-close" id="imgModalClose" aria-label="Закрыть">✕</button>
