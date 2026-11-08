@@ -161,6 +161,8 @@ section{padding:36px 0;}
 .calc-field .input{margin-bottom:14px;}
 .calc-result .big{font-family:'Fraunces',serif;font-size:44px;color:var(--brand);font-weight:600;line-height:1;}
 @media(max-width:520px){.calc-grid{grid-template-columns:1fr;}}
+.img-modal-box.photo{aspect-ratio:auto;width:min(94vw,1100px);height:86vh;box-shadow:none;background:transparent;}
+.img-modal-box.photo .ph-wrap img{object-fit:contain;}
 .ph-wrap{position:absolute;inset:0;}
 .ph-wrap img{width:100%;height:100%;object-fit:cover;display:block;}
 .ph-nav{position:absolute;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:100px;background:rgba(255,255,255,.88);color:#17283A;font-size:19px;line-height:1;display:flex;align-items:center;justify-content:center;z-index:2;cursor:pointer;}
@@ -311,17 +313,17 @@ function metaLine(p){
 }
 
 let PHOTOS={};
-function photosFor(p){
+function photosFor(p,full){
   if(!p.real||!p.article)return [];
   const art=p.article.split(/\s+/)[0];
   const list=[...new Set([...(PHOTOS[p.brand+'|'+art]||[]),...(p.coll?PHOTOS[p.coll+'|'+art]||[]:[])])];
-  return list.map(u=>u.split('/').map(encodeURIComponent).join('/'));
+  return list.map(u=>{if(!full)u=u.replace(/^photos\//,'photos-thumb/');return u.split('/').map(encodeURIComponent).join('/');});
 }
-function photoImg(p){
-  const list=photosFor(p);
+function photoImg(p,full){
+  const list=photosFor(p,full);
   if(!list.length)return '';
   const nav=list.length>1?`<button class="ph-nav prev" data-ph="-1" aria-label="Предыдущее фото">‹</button><button class="ph-nav next" data-ph="1" aria-label="Следующее фото">›</button><div class="ph-dots">${list.map((_,i)=>`<i class="${i?'':'on'}"></i>`).join('')}</div>`:'';
-  return `<div class="ph-wrap" data-pid="${p.id}" data-i="0"><img src="${list[0]}" alt="" loading="lazy" onerror="this.style.display='none'">${nav}</div>`;
+  return `<div class="ph-wrap" data-pid="${p.id}" data-i="0" data-full="${full?1:0}"><img src="${list[0]}" alt="" loading="lazy" onerror="this.style.display='none'">${nav}</div>`;
 }
 
 function swatchStyle(p){
@@ -502,7 +504,7 @@ function renderProduct(id){
       </div>
     </div>
     <div class="product-layout">
-      <div class="swatch" style="${swatchStyle(p)};cursor:zoom-in;" data-zoom="${p.id}" title="Открыть на весь экран">${photoImg(p)}</div>
+      <div class="swatch" style="${swatchStyle(p)};cursor:zoom-in;" data-zoom="${p.id}" title="Открыть на весь экран">${photoImg(p,true)}</div>
       <div>
         <h3 style="font-size:16px;margin-bottom:6px;">Характеристики</h3>
         <div class="spec-row"><span>Производитель</span><span>${p.brand}${p.country?` (${p.country})`:''}</span></div>
@@ -782,7 +784,7 @@ document.addEventListener('click',e=>{
   if(rem){delete cart[rem.dataset.remove];saveCart();updateCartBadge();route(true);return;}
   const phb=e.target.closest('[data-ph]');
   if(phb){
-    const box=phb.closest('.ph-wrap'),pp=PRODUCTS.find(x=>x.id==box.dataset.pid),list=photosFor(pp),n=list.length;
+    const box=phb.closest('.ph-wrap'),pp=PRODUCTS.find(x=>x.id==box.dataset.pid),list=photosFor(pp,box.dataset.full==='1'),n=list.length;
     const i=(Number(box.dataset.i)+Number(phb.dataset.ph)+n)%n;
     box.dataset.i=i;
     const img=box.querySelector('img');img.style.display='';img.src=list[i];
@@ -798,7 +800,7 @@ document.addEventListener('click',e=>{
   const zoom=e.target.closest('[data-zoom]');
   if(zoom){
     const p=PRODUCTS.find(x=>x.id==zoom.dataset.zoom);
-    if(p){const box=document.getElementById('imgModalBox');box.style.cssText=swatchStyle(p)+';position:relative;';box.innerHTML=photoImg(p);document.getElementById('imgModal').classList.add('open');}
+    if(p){const box=document.getElementById('imgModalBox'),ph=photoImg(p,true);box.className='img-modal-box'+(ph?' photo':'');box.style.cssText=ph?'position:relative;':swatchStyle(p)+';position:relative;';box.innerHTML=ph;document.getElementById('imgModal').classList.add('open');}
     return;
   }
   if(e.target.id==='imgModal'||e.target.id==='imgModalClose'){document.getElementById('imgModal').classList.remove('open');return;}
