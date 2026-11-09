@@ -315,8 +315,10 @@ function metaLine(p){
 let PHOTOS={};
 function photosFor(p,full){
   if(!p.real||!p.article)return [];
-  const art=p.article.split(/\s+/)[0];
-  const list=[...new Set([...(PHOTOS[p.brand+'|'+art]||[]),...(p.coll?PHOTOS[p.coll+'|'+art]||[]:[])])];
+  const all=PHOTOS[p.article.split(/\s+/)[0]]||[];
+  const names=[p.brand,...(p.coll?p.coll.split('/'):[])].map(x=>x.trim().toLowerCase()).filter(Boolean);
+  const hint=all.filter(u=>{const q='/'+u.toLowerCase()+'/';return names.some(n=>q.includes('/'+n+'/'));});
+  const list=hint.length?hint:all;
   return list.map(u=>{if(!full)u=u.replace(/^photos\//,'photos-thumb/');return u.split('/').map(encodeURIComponent).join('/');});
 }
 function photoImg(p,full){

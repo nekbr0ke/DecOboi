@@ -20,6 +20,33 @@ fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(OUT, { recursive: true });
 fs.copyFileSync('index.html', path.join(OUT, 'index.html'));
 
+// Известные артикулы берём из таблицы товаров, зашитой в index.html:
+// так номер находится в имени файла как угодно (35422_wall, 35422-rapport, Aura 35422 и т.д.)
+const known = new Map(); // артикул в нижнем регистре -> артикул как в таблице
+try {
+  const html = fs.readFileSync('index.html', 'utf8');
+  const raw = JSON.parse(html.match(/const RAW=(\{[\s\S]*?\});\n/)[1]);
+  raw.r.forEach(r => { if (r[2]) { const a = r[2].split(/\s+/)[0]; known.set(a.toLowerCase(), a); } });
+  console.log('Известных артикулов в таблице:', known.size);
+} catch (e) { console.warn('Не удалось прочитать таблицу артикулов из index.html:', e.message); }
+
+function findArticles(text) {
+  const tokens = text.split(/[^A-Za-z0-9\u0400-\u04FF-]+/).filter(Boolean);
+  const found = new Set();
+  for (const tok of tokens) {
+    let t = tok, hit = null;
+    while (t) {                                  // 35422-rapport -> 35422
+      if (known.has(t.toLowerCase())) { hit = known.get(t.toLowerCase()); break; }
+      const cut = t.replace(/-[^-]*$/, '');
+      if (cut === t) break;
+      t = cut;
+    }
+    if (hit) found.add(hit);
+  }
+  if (!found.size) tokens.filter(t => /\d/.test(t)).forEach(t => found.add(t)); // запасной вариант
+  return [...found];
+}
+
 const manifest = {};
 const jobs = [];
 
@@ -27,15 +54,13 @@ function toJpg(rel) { return rel.replace(EXT, '.jpg'); }
 
 function addPhoto(rel) {
   const parts = rel.split('/');
-  if (parts.length < 2) return;
-  const brand = parts[0];
+  
   const base = parts[parts.length - 1].replace(EXT, '');
   const interior = parts.some(x => /интерьер|interior/i.test(x)) || /interior/i.test(base);
   const cleaned = base.replace(/interior\s*image/i, ' ').replace(/\([^)]*\)/g, ' ');
-  const articles = cleaned.split(/[,;+&\s]+/).filter(t => /\d/.test(t));
-  for (const art of articles) {
-    const key = brand + '|' + art;
-    (manifest[key] = manifest[key] || []).push({ path: 'photos/' + toJpg(rel), interior });
+  const rank = interior ? 3 : /rapport/i.test(base) ? 2 : /wall/i.test(base) ? 1 : 0; // обои, wall, rapport, интерьер
+  for (const art of findArticles(cleaned)) {
+    (manifest[art] = manifest[art] || []).push({ path: 'photos/' + toJpg(rel), rank });
   }
 }
 
@@ -85,7 +110,7 @@ async function main() {
     const seen = new Set();
     result[key] = arr
       .filter(x => !seen.has(x.path) && seen.add(x.path))
-      .sort((a, b) => (a.interior - b.interior) || a.path.localeCompare(b.path, 'ru', { numeric: true }))
+      .sort((a, b) => (a.rank - b.rank) || a.path.localeCompare(b.path, 'ru', { numeric: true }))
       .map(x => x.path);
   }
   fs.writeFileSync(path.join(OUT, 'photos-manifest.json'), JSON.stringify(result));
