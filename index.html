@@ -839,10 +839,10 @@ window.addEventListener('hashchange',()=>{
 });
 // Кнопка «вверх»
 (function(){
-  const b=document.getElementById('toTop');
-  const upd=()=>b.classList.toggle('show',window.scrollY>500);
-  window.addEventListener('scroll',upd,{passive:true});upd();
-  b.addEventListener('click',()=>window.scrollTo({top:0,behavior:'smooth'}));
+  const upd=()=>{const b=document.getElementById('toTop');if(b)b.classList.toggle('show',window.scrollY>500);};
+  window.addEventListener('scroll',upd,{passive:true});
+  document.addEventListener('click',e=>{if(e.target.closest&&e.target.closest('#toTop'))window.scrollTo({top:0,behavior:'smooth'});});
+  upd();
 })();
 const SEARCH_PHRASES=['Искать по артикулу или коллекции…','Например: Bodega, Spectrum, 15023-1…','Бренды: Marburg, Allori, Rossi, Grandeco…'];
 (function(){
