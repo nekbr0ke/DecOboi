@@ -12,7 +12,7 @@ try { sharp = require('sharp'); } catch (e) { console.warn('sharp не найд�
 
 const OUT = 'public';
 const EXT = /\.(jpe?g|png|webp|tiff?)$/i;
-const THUMB_WIDTH = 700;   // ширина превью для каталога
+const THUMB_WIDTH = 640;   // ширина превью для каталога (WebP)
 const FULL_WIDTH = 2400;   // максимальная ширина крупной версии
 const CONCURRENCY = 4;
 
@@ -77,16 +77,18 @@ walk('photos', '');
 
 async function processOne({ src, rel }) {
   const fullDest = path.join(OUT, 'photos', rel);
-  const thumbDest = path.join(OUT, 'photos-thumb', rel);
+  const thumbDest = path.join(OUT, 'photos-thumb', rel.replace(/\.jpg$/, '.webp'));
   fs.mkdirSync(path.dirname(fullDest), { recursive: true });
   fs.mkdirSync(path.dirname(thumbDest), { recursive: true });
   try {
     if (!sharp) throw new Error('no sharp');
-    const base = () => sharp(src, { failOn: 'none' }).rotate();
-    await base().resize({ width: FULL_WIDTH, withoutEnlargement: true })
-      .jpeg({ quality: 86, mozjpeg: true }).toFile(fullDest);
-    await base().resize({ width: THUMB_WIDTH, withoutEnlargement: true })
-      .jpeg({ quality: 78, mozjpeg: true }).toFile(thumbDest);
+    // Оригинал читается один раз: сначала крупная версия, превью делается уже из неё (так быстрее)
+    const fullBuf = await sharp(src, { failOn: 'none' }).rotate()
+      .resize({ width: FULL_WIDTH, withoutEnlargement: true })
+      .jpeg({ quality: 84, progressive: true }).toBuffer();
+    fs.writeFileSync(fullDest, fullBuf);
+    await sharp(fullBuf).resize({ width: THUMB_WIDTH, withoutEnlargement: true })
+      .webp({ quality: 72, effort: 3 }).toFile(thumbDest);
   } catch (err) {
     console.warn('Не удалось обработать', src, '-', err.message, '(копирую как есть)');
     fs.copyFileSync(src, fullDest);

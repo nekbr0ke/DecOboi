@@ -55,7 +55,7 @@ main{padding-bottom:64px;}
 .btn{display:inline-block;padding:13px 24px;background:var(--brand);color:var(--brand-ink);border-radius:var(--radius);font-weight:700;font-size:14px;}
 .btn.secondary{background:transparent;border:1px solid var(--ink);color:var(--ink);}
 .hero-swatches{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
-.hero-swatches div{aspect-ratio:1;border-radius:var(--radius);}
+.hero-swatches>div{aspect-ratio:1;border-radius:var(--radius);overflow:hidden;}
 
 /* chips */
 .chips{display:flex;gap:10px;padding:28px 0 8px;overflow-x:auto;}
@@ -163,6 +163,10 @@ section{padding:36px 0;}
 @media(max-width:520px){.calc-grid{grid-template-columns:1fr;}}
 .img-modal-box.photo{aspect-ratio:auto;width:min(94vw,1100px);height:86vh;box-shadow:none;background:transparent;}
 .img-modal-box.photo .ph-wrap img{object-fit:contain;}
+.to-top{position:fixed;right:18px;bottom:calc(18px + env(safe-area-inset-bottom,0px));width:46px;height:46px;border-radius:100px;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(20,60,110,.3);opacity:0;pointer-events:none;transform:translateY(8px);transition:opacity .2s ease,transform .2s ease,background-color .2s ease;z-index:40;cursor:pointer;}
+.to-top.show{opacity:1;pointer-events:auto;transform:none;}
+.to-top:hover{background:var(--accent);}
+.no-photo{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:10px;font-size:12px;color:var(--muted);}
 .ph-wrap{position:absolute;inset:0;}
 .ph-wrap img{width:100%;height:100%;object-fit:cover;display:block;}
 .ph-nav{position:absolute;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:100px;background:rgba(255,255,255,.88);color:#17283A;font-size:19px;line-height:1;display:flex;align-items:center;justify-content:center;z-index:2;cursor:pointer;}
@@ -313,32 +317,24 @@ function metaLine(p){
 }
 
 let PHOTOS={};
+let PHOTOS_LOADED=false;
 function photosFor(p,full){
   if(!p.real||!p.article)return [];
   const all=PHOTOS[p.article.split(/\s+/)[0]]||[];
   const names=[p.brand,...(p.coll?p.coll.split('/'):[])].map(x=>x.trim().toLowerCase()).filter(Boolean);
   const hint=all.filter(u=>{const q='/'+u.toLowerCase()+'/';return names.some(n=>q.includes('/'+n+'/'));});
   const list=hint.length?hint:all;
-  return list.map(u=>{if(!full)u=u.replace(/^photos\//,'photos-thumb/');return u.split('/').map(encodeURIComponent).join('/');});
+  return list.map(u=>{if(!full)u=u.replace(/^photos\//,'photos-thumb/').replace(/\.jpg$/i,'.webp');return u.split('/').map(encodeURIComponent).join('/');});
 }
 function photoImg(p,full){
   const list=photosFor(p,full);
-  if(!list.length)return '';
+  if(!list.length)return p.real&&PHOTOS_LOADED?'<div class="no-photo">Фото скоро появится</div>':'';
   const nav=list.length>1?`<button class="ph-nav prev" data-ph="-1" aria-label="Предыдущее фото">‹</button><button class="ph-nav next" data-ph="1" aria-label="Следующее фото">›</button><div class="ph-dots">${list.map((_,i)=>`<i class="${i?'':'on'}"></i>`).join('')}</div>`:'';
-  return `<div class="ph-wrap" data-pid="${p.id}" data-i="0" data-full="${full?1:0}"><img src="${list[0]}" alt="" loading="lazy" onerror="this.style.display='none'">${nav}</div>`;
+  return `<div class="ph-wrap" data-pid="${p.id}" data-i="0" data-full="${full?1:0}"><img src="${list[0]}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'">${nav}</div>`;
 }
 
 function swatchStyle(p){
-  if(p.art)return `background:#EAF3FA url('data:image/svg+xml,${encodeURIComponent(artSvg(p))}') center/cover no-repeat;`;
-  const [a,b]=p.colors;
-  const map={
-    stripe:`background:repeating-linear-gradient(115deg,${a},${a} 16px,${b} 16px,${b} 32px);`,
-    dot:`background-color:${a};background-image:radial-gradient(${b} 3px,transparent 4px);background-size:20px 20px;`,
-    trellis:`background-color:${a};background-image:linear-gradient(45deg,${b} 25%,transparent 25.5%),linear-gradient(-45deg,${b} 25%,transparent 25.5%);background-size:26px 26px;`,
-    floral:`background-color:${a};background-image:radial-gradient(circle at 30% 30%,${b} 6px,transparent 7px),radial-gradient(circle at 70% 70%,${b} 6px,transparent 7px);background-size:32px 32px;`,
-    plain:`background-color:${a};`
-  };
-  return map[p.pattern]||map.plain;
+  return 'background:#E9F1F8;';
 }
 
 function discount(p){return p.old?Math.round((1-p.price/p.old)*100):0;}
@@ -378,16 +374,16 @@ let catalogState={room:'all',cat:'all',brand:'all',coll:'all',stock:false,q:'',w
 function renderHome(){
   const hits=PRODUCTS.filter(p=>p.real&&p.avail===1&&p.cat==='Обои').slice(0,4);
   const news=PRODUCTS.filter(p=>p.isNew).slice(0,4);
-  const heroSwatches=PRODUCTS.slice(4,7).map(p=>`<div style="${swatchStyle(p)}"></div>`).join('');
+  const heroItems=PRODUCTS.filter(p=>photosFor(p).length).slice(0,3);
   return `
-  <div class="hero"><div class="wrap hero-grid">
+  <div class="hero"><div class="wrap hero-grid" style="${heroItems.length?'':'grid-template-columns:1fr;'}">
     <div>
       <h1>Обои, которые задают тон комнате</h1>
       <p>Каталог рулонных обоев для гостиной, спальни, кухни и детской — от плотного флизелина до лёгкого бумажного полотна.</p>
       <a href="#/catalog" class="btn">Смотреть каталог</a>
       <a href="#/sale" class="btn secondary" style="margin-left:10px;">Распродажа</a>
     </div>
-    <div class="hero-swatches">${heroSwatches}</div>
+    ${heroItems.length?`<div class="hero-swatches">${heroItems.map(p=>`<div class="swatch" data-product="${p.id}" style="${swatchStyle(p)};cursor:pointer;">${photoImg(p)}</div>`).join('')}</div>`:''}
   </div></div>
   <div class="wrap">
     <section>
@@ -498,7 +494,7 @@ function renderProduct(id){
     : `<button class="btn" style="width:100%;" data-add="${p.id}">Добавить в корзину</button>`;
   return `<div class="wrap">
     <div style="padding:24px 0 6px;">
-      <a href="#/catalog" style="font-size:13px;color:var(--muted);">← Назад в каталог</a>
+      <a href="#/catalog" data-back="1" style="font-size:13px;color:var(--muted);">← Назад</a>
       <h1 style="font-size:24px;margin-top:10px;">${p.name}${p.coll?' — '+p.coll.replace('каталог ',''):''}</h1>
       <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:13.5px;color:var(--muted);">
         <span class="fav${favorites[p.id]?' active':''}" data-fav="${p.id}" style="position:static;background:none;width:auto;height:auto;color:${favorites[p.id]?'#D1372B':'var(--muted)'};cursor:pointer;">${favorites[p.id]?'♥':'♡'} В избранное</span>
@@ -506,7 +502,7 @@ function renderProduct(id){
       </div>
     </div>
     <div class="product-layout">
-      <div class="swatch" style="${swatchStyle(p)};cursor:zoom-in;" data-zoom="${p.id}" title="Открыть на весь экран">${photoImg(p,true)}</div>
+      <div class="swatch" style="${swatchStyle(p)};${photosFor(p,true).length?'cursor:zoom-in;':''}" ${photosFor(p,true).length?`data-zoom="${p.id}" title="Открыть на весь экран"`:''}>${photoImg(p,true)}</div>
       <div>
         <h3 style="font-size:16px;margin-bottom:6px;">Характеристики</h3>
         <div class="spec-row"><span>Производитель</span><span>${p.brand}${p.country?` (${p.country})`:''}</span></div>
@@ -754,6 +750,7 @@ document.querySelector('header.site').addEventListener('click',e=>{
 });
 
 document.addEventListener('click',e=>{
+  if(e.target.closest('[data-back]')&&window.__navigated){e.preventDefault();history.back();return;}
   const add=e.target.closest('[data-add]');
   if(add){const id=add.dataset.add;cart[id]=(cart[id]||0)+1;saveCart();updateCartBadge();route(true);return;}
   const fav=e.target.closest('[data-fav]');
@@ -823,7 +820,30 @@ document.addEventListener('change',e=>{
   }
   if(e.target.id==='sortSel'){catalogState.sort=e.target.value;route(true);}
 });
-window.addEventListener('hashchange',route);
+// Запоминаем прокрутку каждой страницы: «назад» возвращает туда, откуда пришли
+const scrollPos={};let navKey=null,navSeq=Date.now();
+function ensureKey(){
+  const st=history.state;
+  if(st&&st.k){navKey=st.k;return true;}
+  navKey=++navSeq;
+  try{history.replaceState({k:navKey},'');}catch(e){}
+  return false;
+}
+window.addEventListener('hashchange',()=>{
+  if(navKey!==null)scrollPos[navKey]=window.scrollY;
+  window.__navigated=true;
+  const restored=ensureKey();
+  const y=scrollPos[navKey];
+  if(restored&&y!=null){route(true);window.scrollTo(0,y);requestAnimationFrame(()=>window.scrollTo(0,y));}
+  else route();
+});
+// Кнопка «вверх»
+(function(){
+  const b=document.getElementById('toTop');
+  const upd=()=>b.classList.toggle('show',window.scrollY>500);
+  window.addEventListener('scroll',upd,{passive:true});upd();
+  b.addEventListener('click',()=>window.scrollTo({top:0,behavior:'smooth'}));
+})();
 const SEARCH_PHRASES=['Искать по артикулу или коллекции…','Например: Bodega, Spectrum, 15023-1…','Бренды: Marburg, Allori, Rossi, Grandeco…'];
 (function(){
   const form=document.querySelector('.search'),input=document.getElementById('searchInput');
@@ -866,10 +886,12 @@ typewriter();
 })();
 Object.keys(cart).forEach(id=>{if(!PRODUCTS.some(p=>p.id==id))delete cart[id];});saveCart();
 Object.keys(favorites).forEach(id=>{if(!PRODUCTS.some(p=>p.id==id))delete favorites[id];});saveFavs();
+ensureKey();
 updateCartBadge();
 route();
-fetch('photos-manifest.json').then(r=>r.ok?r.json():{}).then(j=>{PHOTOS=j||{};route(true);}).catch(()=>{});
+fetch('photos-manifest.json').then(r=>r.ok?r.json():{}).then(j=>{PHOTOS=j||{};}).catch(()=>{}).then(()=>{PHOTOS_LOADED=true;route(true);});
 </script>
+<button class="to-top" id="toTop" aria-label="Наверх"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 15l7-7 7 7"/></svg></button>
 <div class="img-modal" id="imgModal">
   <button class="img-modal-close" id="imgModalClose" aria-label="Закрыть">✕</button>
   <div class="img-modal-box" id="imgModalBox"></div>
