@@ -47,8 +47,48 @@ function findArticles(text) {
   return [...found];
 }
 
+// Клей и грунтовки: у них нет артикула, поэтому фото подбираются по названию
+// (бренд + тип + размер, например "Kleo Extra 12", "primer_50", "Спец-Флизелин 35").
+const glue = []; // { name, nums:[число], words:[варианты слов] }
+try {
+  const html = fs.readFileSync('index.html', 'utf8');
+  const raw = JSON.parse(html.match(/const RAW=(\{[\s\S]*?\});\n/)[1]);
+  const CYR = {                                  // русские слова из названия и их латинские варианты
+    'универсальный': ['универсальный', 'универсал', 'universal'],
+    'флизелин': ['флизелин', 'fliz', 'fleece', 'спец'],
+    'премиум': ['премиум', 'premium'],
+    'стык': ['стык', 'joint', 'seam'],
+    'стеклообои': ['стеклообои', 'стекло', 'glass']
+  };
+  const ALIAS = { mini: ['mini', 'extra'] };      // Mini 12 раньше назывался Extra 12
+  raw.r.forEach(r => {
+    const brand = raw.b[r[0]];
+    if (r[2] || (brand !== 'Kleo' && brand !== 'Quelyd')) return;
+    const name = raw.c[r[1]];
+    const low = name.toLowerCase().replace(/ё/g, 'е');
+    const m = low.match(/(\d+)\s*(?:м²|m|г)(?![a-zа-я0-9])/);
+    const words = [];
+    (low.match(/[a-z]{3,}/g) || []).filter(w => w !== 'kleo').forEach(w => words.push(...(ALIAS[w] || [w])));
+    Object.entries(CYR).forEach(([w, variants]) => { if (low.includes(w)) words.push(...variants); });
+    if (m && words.length) glue.push({ name, brand: brand.toLowerCase(), num: m[1], words });
+  });
+} catch (e) { console.warn('Не удалось прочитать список клея:', e.message); }
+
+function findGlue(text) {
+  const low = text.toLowerCase().replace(/ё/g, 'е');
+  const nums = (low.match(/\d+/g) || []);
+  const hits = [];
+  for (const g of glue) {
+    if (!nums.includes(g.num)) continue;
+    if (!g.words.some(w => low.includes(w))) continue;
+    hits.push(g.name);
+  }
+  return hits;
+}
+
 const manifest = {};
 const jobs = [];
+const glueLog = {};
 
 function toJpg(rel) { return rel.replace(EXT, '.jpg'); }
 
@@ -59,6 +99,16 @@ function addPhoto(rel) {
   const interior = parts.some(x => /интерьер|interior/i.test(x)) || /interior/i.test(base);
   const cleaned = base.replace(/interior\s*image/i, ' ').replace(/\([^)]*\)/g, ' ');
   const rank = interior ? 3 : /rapport/i.test(base) ? 2 : /wall/i.test(base) ? 1 : 0; // обои, wall, rapport, интерьер
+  const keys = findArticles(cleaned).filter(a => known.has(a.toLowerCase()));
+  const looksGlue = /kleo|quelyd|клей|клеи|грунт|glue|primer/i.test(rel);
+  const glueHits = (looksGlue || !keys.length) ? findGlue(rel.replace(/\.[^.]+$/, '')) : [];
+  if (glueHits.length) {
+    for (const g of glueHits) {
+      (manifest[g] = manifest[g] || []).push({ path: 'photos/' + toJpg(rel), rank });
+      (glueLog[g] = glueLog[g] || []).push(rel);
+    }
+    return;
+  }
   for (const art of findArticles(cleaned)) {
     (manifest[art] = manifest[art] || []).push({ path: 'photos/' + toJpg(rel), rank });
   }
@@ -116,6 +166,8 @@ async function main() {
       .map(x => x.path);
   }
   fs.writeFileSync(path.join(OUT, 'photos-manifest.json'), JSON.stringify(result));
-  console.log('Фото обработано:', jobs.length, '| артикулов с фото:', Object.keys(result).length);
+  console.log('Фото обработано:', jobs.length, '| позиций с фото:', Object.keys(result).length);
+  console.log('--- Клей и грунтовки: какое фото к какой карточке ---');
+  for (const g of glue) console.log((glueLog[g.name] ? 'OK   ' : 'нет  ') + g.name + (glueLog[g.name] ? '  <-  ' + glueLog[g.name].join(', ') : ''));
 }
 main().catch(e => { console.error(e); process.exit(1); });
