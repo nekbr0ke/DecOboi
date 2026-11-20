@@ -62,7 +62,7 @@ try {
   };
   const ALIAS = { mini: ['mini', 'extra'] };      // Mini 12 раньше назывался Extra 12
   raw.r.forEach(r => {
-    const brand = raw.b[r[0]];
+    const brand = raw.b[r[0]].split('/').pop().trim();
     if (r[2] || (brand !== 'Kleo' && brand !== 'Quelyd')) return;
     const name = raw.c[r[1]];
     const low = name.toLowerCase().replace(/ё/g, 'е');
@@ -87,8 +87,11 @@ function findGlue(text) {
 }
 
 const manifest = {};
+const covers = {};      // обложки каталогов: имя каталога -> [{ b: бренд, p: путь }]
 const jobs = [];
 const glueLog = {};
+const coverLog = [];
+const norm = t => String(t).toLowerCase().replace(/ё/g, 'е').replace(/[^a-z0-9а-я]+/g, '');
 
 function toJpg(rel) { return rel.replace(EXT, '.jpg'); }
 
@@ -96,6 +99,16 @@ function addPhoto(rel) {
   const parts = rel.split('/');
   
   const base = parts[parts.length - 1].replace(EXT, '');
+  // Обложка каталога: файл лежит в папке каталога и называется как эта папка (Aura/Aura.jpg)
+  if (parts.length >= 2) {
+    const parent = parts[parts.length - 2];
+    if (norm(base) && (norm(base) === norm(parent) || (norm(parent).length >= 4 && norm(base).length >= 4 && (norm(base).includes(norm(parent)) || norm(parent).includes(norm(base)))))) {
+      const key = norm(parent);
+      (covers[key] = covers[key] || []).push({ b: parts.length >= 3 ? norm(parts[0]) : '', p: 'photos/' + toJpg(rel) });
+      coverLog.push(rel);
+      return;
+    }
+  }
   const interior = parts.some(x => /интерьер|interior/i.test(x)) || /interior/i.test(base);
   const cleaned = base.replace(/interior\s*image/i, ' ').replace(/\([^)]*\)/g, ' ');
   const rank = interior ? 3 : /rapport/i.test(base) ? 2 : /wall/i.test(base) ? 1 : 0; // обои, wall, rapport, интерьер
@@ -165,7 +178,10 @@ async function main() {
       .sort((a, b) => (a.rank - b.rank) || a.path.localeCompare(b.path, 'ru', { numeric: true }))
       .map(x => x.path);
   }
+  if (Object.keys(covers).length) result.__covers__ = covers;
   fs.writeFileSync(path.join(OUT, 'photos-manifest.json'), JSON.stringify(result));
+  console.log('Обложек каталогов найдено:', coverLog.length);
+  coverLog.forEach(c => console.log('  обложка:', c));
   console.log('Фото обработано:', jobs.length, '| позиций с фото:', Object.keys(result).length);
   console.log('--- Клей и грунтовки: какое фото к какой карточке ---');
   for (const g of glue) console.log((glueLog[g.name] ? 'OK   ' : 'нет  ') + g.name + (glueLog[g.name] ? '  <-  ' + glueLog[g.name].join(', ') : ''));
